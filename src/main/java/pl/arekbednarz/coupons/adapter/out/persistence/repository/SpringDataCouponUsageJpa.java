@@ -5,7 +5,8 @@ import pl.arekbednarz.coupons.adapter.out.persistence.entity.CouponUsageEntity;
 
 import java.util.UUID;
 
+
 public interface SpringDataCouponUsageJpa extends JpaRepository<CouponUsageEntity, UUID> {
 
-    boolean existsByCouponIdAndUserId(UUID couponId, String userId);
+	boolean existsByCouponIdAndUserId(UUID couponId, String userId);
 }

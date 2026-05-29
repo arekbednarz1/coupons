@@ -1,81 +1,94 @@
 package pl.arekbednarz.coupons.application.service;
 
+import jakarta.persistence.OptimisticLockException;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import pl.arekbednarz.coupons.domain.exception.*;
 import pl.arekbednarz.coupons.domain.model.Coupon;
-import pl.arekbednarz.coupons.domain.model.CouponUsage;
 import pl.arekbednarz.coupons.domain.model.value.CountryCode;
 import pl.arekbednarz.coupons.domain.model.value.CouponCode;
 import pl.arekbednarz.coupons.domain.port.CouponRepository;
 import pl.arekbednarz.coupons.domain.port.CouponUsageRepository;
 import pl.arekbednarz.coupons.domain.port.GeoLocationService;
 
+
 @Service
 public class CouponService {
 
-    private static final int MAX_RETRIES = 3;
+	private final int maxRetries;
+	private final CouponRepository couponRepository;
+	private final CouponUsageRepository usageRepository;
+	private final GeoLocationService geoLocationService;
+	private final CouponUsageEventHandler usageEventHandler;
 
-    private final CouponRepository couponRepository;
-    private final CouponUsageRepository couponUsageRepository;
-    private final GeoLocationService geoLocationService;
+	public CouponService(CouponRepository couponRepository,
+		CouponUsageRepository usageRepository,
+		GeoLocationService geoLocationService,
+		CouponUsageEventHandler usageEventHandler,
+		@Value("${max.retries:3}") int maxRetries) {
+		this.couponRepository = couponRepository;
+		this.usageRepository = usageRepository;
+		this.geoLocationService = geoLocationService;
+		this.usageEventHandler = usageEventHandler;
+		this.maxRetries = maxRetries;
+	}
 
-    public CouponService(CouponRepository couponRepository,
-                         CouponUsageRepository couponUsageRepository,
-                         GeoLocationService geoLocationService) {
-        this.couponRepository = couponRepository;
-        this.couponUsageRepository = couponUsageRepository;
-        this.geoLocationService = geoLocationService;
-    }
+	@Transactional
+	public Coupon createCoupon(String rawCode, int maxUsages, String rawCountry) {
+		Coupon coupon = Coupon.createNew(rawCode, maxUsages, rawCountry);
+		return couponRepository.save(coupon);
+	}
 
-    @Transactional
-    public Coupon createCoupon(String rawCode, int maxUsages, String rawCountryCode) {
-        Coupon coupon = Coupon.createNew(rawCode, maxUsages, rawCountryCode);
-        return couponRepository.save(coupon);
-    }
+	@Transactional
+	public UseCouponResult useCoupon(String rawCode, String userId, String ipAddress) {
 
-    @Transactional
-    public UseCouponResult useCoupon(String rawCode, String userId, String ipAddress) {
-        CouponCode code = CouponCode.of(rawCode);
+		CouponCode code = CouponCode.of(rawCode);
 
-        Coupon coupon = couponRepository.findByCode(code)
-                .orElseThrow(() -> new CouponNotFoundException(code.value()));
+		Coupon coupon = couponRepository.findByCode(code)
+			.orElseThrow(() -> new CouponNotFoundException(code.value()));
 
-        String country = geoLocationService.resolveCountryCode(ipAddress)
-                .orElseThrow(() -> new GeoLocationUnavailableException(ipAddress));
+		CountryCode userCountry = resolveUserCountry(ipAddress);
+		coupon.validateCountry(userCountry);
 
-        CountryCode userCountry = CountryCode.of(country);
-        coupon.validateCountry(userCountry);
+		validateUserNotUsedBefore(coupon, userId);
 
-        if (userId != null &&
-                couponUsageRepository.existsByCouponIdAndUserId(coupon.id(), userId)) {
-            throw new CouponAlreadyUsedByUserException(code.value(), userId);
-        }
+		int attempts = 0;
 
-        int attempts = 0;
-        while (true) {
-            try {
-                Coupon updated = coupon.useOnce();
-                Coupon persisted = couponRepository.save(updated);
+		while (true) {
+			try {
+				Coupon.CouponUsedResult result = coupon.useOnce(userId, ipAddress);
 
-                CouponUsage usage = CouponUsage.createNew(
-                        persisted.id(),
-                        userId,
-                        ipAddress,
-                        persisted.countryCode().value()
-                );
-                couponUsageRepository.save(usage);
+				Coupon persisted = couponRepository.save(result.updatedCoupon());
 
-                int remaining = persisted.maxUsages() - persisted.currentUsages();
-                return new UseCouponResult(persisted.code().value(), remaining);
+				usageEventHandler.handle(result.event());
 
-            } catch (OptimisticLockingException ex) {
-                if (++attempts >= MAX_RETRIES) {
-                    throw new CouponConcurrentUsageException(code.value());
-                }
-                coupon = couponRepository.findByCode(code)
-                        .orElseThrow(() -> new CouponNotFoundException(code.value()));
-            }
-        }
-    }
+				int remaining = persisted.maxUsages() - persisted.currentUsages();
+				return new UseCouponResult(persisted.code().value(), remaining);
+
+			} catch (ObjectOptimisticLockingFailureException | OptimisticLockException ex) {
+
+				if (++attempts >= maxRetries) {
+					throw new CouponConcurrentUsageException(code.value());
+				}
+
+				coupon = couponRepository.findByCode(code)
+					.orElseThrow(() -> new CouponNotFoundException(code.value()));
+			}
+		}
+	}
+
+	private CountryCode resolveUserCountry(String ipAddress) {
+		String country = geoLocationService.resolveCountryCode(ipAddress)
+			.orElseThrow(() -> new GeoLocationUnavailableException(ipAddress));
+		return CountryCode.of(country);
+	}
+
+	private void validateUserNotUsedBefore(Coupon coupon, String userId) {
+		if (userId != null &&
+			usageRepository.existsByCouponIdAndUserId(coupon.id(), userId)) {
+			throw new CouponAlreadyUsedByUserException(coupon.code().value(), userId);
+		}
+	}
 }

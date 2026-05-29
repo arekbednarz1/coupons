@@ -9,26 +9,27 @@ import pl.arekbednarz.coupons.domain.port.CouponUsageRepository;
 import java.util.Optional;
 import java.util.UUID;
 
+
 @Repository
 @RequiredArgsConstructor
 public class JpaCouponUsageRepository implements CouponUsageRepository {
 
-    private final SpringDataCouponUsageJpa jpa;
-    private final CouponUsageMapper mapper;
+	private final SpringDataCouponUsageJpa jpa;
+	private final CouponUsageMapper mapper;
 
-    @Override
-    public Optional<CouponUsage> findById(UUID id) {
-        return jpa.findById(id).map(mapper::toDomain);
-    }
+	@Override
+	public Optional<CouponUsage> findById(UUID id) {
+		return jpa.findById(id).map(mapper::toDomain);
+	}
 
-    @Override
-    public CouponUsage save(CouponUsage usage) {
-        var saved = jpa.save(mapper.toEntity(usage));
-        return mapper.toDomain(saved);
-    }
+	@Override
+	public CouponUsage save(CouponUsage usage) {
+		var saved = jpa.save(mapper.toEntity(usage));
+		return mapper.toDomain(saved);
+	}
 
-    @Override
-    public boolean existsByCouponIdAndUserId(UUID couponId, String userId) {
-        return jpa.existsByCouponIdAndUserId(couponId, userId);
-    }
+	@Override
+	public boolean existsByCouponIdAndUserId(UUID couponId, String userId) {
+		return jpa.existsByCouponIdAndUserId(couponId, userId);
+	}
 }
