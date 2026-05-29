@@ -35,6 +35,7 @@
         <formatter.version>2.17.1</formatter.version>
         <rest-assured.version>5.5.7</rest-assured.version>
         <jackson.version>2.21.3</jackson.version>
+        <postgres.version>42.7.11</postgres.version>
     </properties>
     <dependencies>
         <dependency>
@@ -75,7 +76,7 @@
         <dependency>
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>
-            <version>42.7.11</version>
+            <version>${postgres.version}</version>
             <scope>compile</scope>
         </dependency>
         <dependency>
