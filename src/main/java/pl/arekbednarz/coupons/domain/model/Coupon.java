@@ -69,7 +69,7 @@ public final class Coupon {
 			maxUsages,
 			currentUsages + 1,
 			countryCode,
-			version + 1);
+			version);
 
 		CouponUsedEvent event = new CouponUsedEvent(
 			updated.id,

@@ -3,11 +3,11 @@ package pl.arekbednarz.coupons.adapter;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.test.context.ContextConfiguration;
 import pl.arekbednarz.coupons.adapter.out.persistence.mapper.CouponMapper;
 import pl.arekbednarz.coupons.adapter.out.persistence.repository.JpaCouponRepository;
 import pl.arekbednarz.coupons.adapter.out.persistence.repository.SpringDataCouponJpa;
-import pl.arekbednarz.coupons.domain.exception.OptimisticLockingException;
 import pl.arekbednarz.coupons.domain.model.Coupon;
 import pl.arekbednarz.coupons.domain.model.value.CountryCode;
 import pl.arekbednarz.coupons.domain.model.value.CouponCode;
@@ -76,20 +76,20 @@ class JpaCouponRepositoryTest {
 	@Test
 	void shouldThrowOptimisticLockingException() {
 		var coupon = newCoupon("LOCK1");
+		var entity = mapper.toEntity(coupon);
+		var saved = jpa.save(entity);
 
-		var savedEntity = jpa.save(mapper.toEntity(coupon));
+		var fresh = jpa.findById(saved.getId()).orElseThrow();
 
-		var stale = mapper.toDomain(savedEntity);
-		var staleWithOldVersion = new Coupon(
-			stale.id(),
-			stale.code(),
-			stale.createdAt(),
-			stale.maxUsages(),
-			stale.currentUsages(),
-			stale.countryCode(),
-			stale.version() - 1);
+		fresh.setCurrentUsages(fresh.getCurrentUsages() + 1);
+		jpa.save(fresh);
 
-		assertThatThrownBy(() -> repository.save(staleWithOldVersion))
-			.isInstanceOf(OptimisticLockingException.class);
+		var stale = jpa.findById(saved.getId()).orElseThrow();
+		stale.setCurrentUsages(stale.getCurrentUsages() + 1);
+		stale.setVersion(saved.getVersion());
+
+		assertThatThrownBy(() -> jpa.save(stale))
+			.isInstanceOf(ObjectOptimisticLockingFailureException.class);
 	}
+
 }

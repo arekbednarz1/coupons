@@ -1,10 +1,10 @@
 package pl.arekbednarz.coupons.adapter.out.persistence.repository;
 
 import lombok.RequiredArgsConstructor;
-import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
+import pl.arekbednarz.coupons.adapter.out.persistence.entity.CouponEntity;
 import pl.arekbednarz.coupons.adapter.out.persistence.mapper.CouponMapper;
-import pl.arekbednarz.coupons.domain.exception.OptimisticLockingException;
 import pl.arekbednarz.coupons.domain.model.Coupon;
 import pl.arekbednarz.coupons.domain.model.value.CouponCode;
 import pl.arekbednarz.coupons.domain.port.CouponRepository;
@@ -31,12 +31,13 @@ public class JpaCouponRepository implements CouponRepository {
 	}
 
 	@Override
+	@Transactional
 	public Coupon save(Coupon coupon) {
-		try {
-			var saved = jpa.save(mapper.toEntity(coupon));
-			return mapper.toDomain(saved);
-		} catch (OptimisticLockingFailureException ex) {
-			throw new OptimisticLockingException("Optimistic lock failed", ex);
-		}
+		CouponEntity entity = jpa.findById(coupon.id()).orElse(new CouponEntity());
+
+		mapper.updateEntity(entity, coupon);
+
+		var saved = jpa.save(entity);
+		return mapper.toDomain(saved);
 	}
 }

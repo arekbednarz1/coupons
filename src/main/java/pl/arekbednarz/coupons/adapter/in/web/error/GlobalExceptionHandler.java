@@ -1,5 +1,7 @@
 package pl.arekbednarz.coupons.adapter.in.web.error;
 
+import org.postgresql.util.PSQLException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -43,5 +45,10 @@ public class GlobalExceptionHandler {
 	@ExceptionHandler(CouponConcurrentUsageException.class)
 	public ResponseEntity<Object> handleConcurrent(CouponConcurrentUsageException ex) {
 		return error(HttpStatus.CONFLICT, ex.getMessage());
+	}
+
+	@ExceptionHandler(DataIntegrityViolationException.class)
+	public ResponseEntity<Object> handleExists(DataIntegrityViolationException ex) {
+		return error(HttpStatus.CONFLICT, "Code already exists");
 	}
 }

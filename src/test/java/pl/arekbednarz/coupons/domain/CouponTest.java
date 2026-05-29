@@ -75,7 +75,7 @@ class CouponTest {
 		Coupon updated = coupon.useOnce("UserId", "8.8.8.8").updatedCoupon();
 
 		assertThat(updated.currentUsages()).isEqualTo(3);
-		assertThat(updated.version()).isEqualTo(4L);
+		assertThat(updated.version()).isEqualTo(3L);
 	}
 
 	@Test

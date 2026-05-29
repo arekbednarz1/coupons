@@ -4,6 +4,7 @@ import jakarta.persistence.OptimisticLockException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import pl.arekbednarz.coupons.domain.exception.*;
 import pl.arekbednarz.coupons.domain.model.Coupon;
@@ -41,7 +42,6 @@ public class CouponService {
 		return couponRepository.save(coupon);
 	}
 
-	@Transactional
 	public UseCouponResult useCoupon(String rawCode, String userId, String ipAddress) {
 
 		CouponCode code = CouponCode.of(rawCode);
@@ -67,7 +67,8 @@ public class CouponService {
 				int remaining = persisted.maxUsages() - persisted.currentUsages();
 				return new UseCouponResult(persisted.code().value(), remaining);
 
-			} catch (ObjectOptimisticLockingFailureException | OptimisticLockException ex) {
+			} catch (ObjectOptimisticLockingFailureException
+				| OptimisticLockException e) {
 
 				if (++attempts >= maxRetries) {
 					throw new CouponConcurrentUsageException(code.value());
